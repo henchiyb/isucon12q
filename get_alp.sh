@@ -1,6 +1,6 @@
 #!bin/sh
 #TODO
-sudo alp ltsv --file=/var/log/nginx/access.log --sort sum --reverse -q --nosave-pos --qs-ignore-values
+sudo alp ltsv --file=/var/log/nginx/access.log --sort sum --reverse -q --nosave-pos --qs-ignore-values -m "/api/player/player/, /api/organizer/competitions, /api/organizer/competition/, /api/player/competition/, /api/organizer/player/"
 # sudo mysqldumpslow -s t /var/log/mysql/mysql-slow.log | head -n 20
 
 # cd webapp
