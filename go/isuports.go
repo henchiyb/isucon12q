@@ -1034,7 +1034,7 @@ func competitionFinishHandler(c echo.Context) error {
 		)
 	}
 
-	go billingReportByCompetition(ctx, tenantDB, v.tenantID, id)
+	// go billingReportByCompetition(ctx, tenantDB, v.tenantID, id)
 	cachedConpetition.Delete(id)
 	return c.JSON(http.StatusOK, SuccessResult{Status: true})
 }
