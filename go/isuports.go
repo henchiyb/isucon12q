@@ -557,11 +557,22 @@ type VisitHistorySummaryRow struct {
 	MinCreatedAt int64  `db:"min_created_at"`
 }
 
+var cachedFinishedBillingReport sync.Map
+
 // 大会ごとの課金レポートを計算する
 func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID int64, competitonID string) (*BillingReport, error) {
+	cachedKey := fmt.Sprintf("%d_%s", tenantID, competitonID)
 	comp, err := retrieveCompetition(ctx, tenantDB, competitonID)
+
 	if err != nil {
 		return nil, fmt.Errorf("error retrieveCompetition: %w", err)
+	}
+
+	if comp.FinishedAt.Valid {
+		if cached, ok := cachedFinishedBillingReport.Load(cachedKey); ok {
+			result := cached.(BillingReport)
+			return &result, nil
+		}
 	}
 
 	// ランキングにアクセスした参加者のIDを取得する
@@ -618,7 +629,8 @@ func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID i
 			}
 		}
 	}
-	return &BillingReport{
+
+	result := BillingReport{
 		CompetitionID:     comp.ID,
 		CompetitionTitle:  comp.Title,
 		PlayerCount:       playerCount,
@@ -626,7 +638,11 @@ func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID i
 		BillingPlayerYen:  100 * playerCount, // スコアを登録した参加者は100円
 		BillingVisitorYen: 10 * visitorCount, // ランキングを閲覧だけした(スコアを登録していない)参加者は10円
 		BillingYen:        100*playerCount + 10*visitorCount,
-	}, nil
+	}
+
+	cachedFinishedBillingReport.Store(cachedKey, result)
+
+	return &result, nil
 }
 
 type TenantWithBilling struct {
