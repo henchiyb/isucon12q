@@ -220,6 +220,8 @@ type Viewer struct {
 	tenantID   int64
 }
 
+var cachedViewer sync.Map
+
 // リクエストヘッダをパースしてViewerを返す
 func parseViewer(c echo.Context) (*Viewer, error) {
 	cookie, err := c.Request().Cookie(cookieName)
@@ -230,80 +232,86 @@ func parseViewer(c echo.Context) (*Viewer, error) {
 		)
 	}
 	tokenStr := cookie.Value
+	var v *Viewer
+	if cached, ok := cachedViewer.Load(tokenStr); ok {
+		v = cached.(*Viewer)
+	} else {
+		keyFilename := getEnv("ISUCON_JWT_KEY_FILE", "../public.pem")
+		keysrc, err := os.ReadFile(keyFilename)
+		if err != nil {
+			return nil, fmt.Errorf("error os.ReadFile: keyFilename=%s: %w", keyFilename, err)
+		}
+		key, _, err := jwk.DecodePEM(keysrc)
+		if err != nil {
+			return nil, fmt.Errorf("error jwk.DecodePEM: %w", err)
+		}
 
-	keyFilename := getEnv("ISUCON_JWT_KEY_FILE", "../public.pem")
-	keysrc, err := os.ReadFile(keyFilename)
-	if err != nil {
-		return nil, fmt.Errorf("error os.ReadFile: keyFilename=%s: %w", keyFilename, err)
-	}
-	key, _, err := jwk.DecodePEM(keysrc)
-	if err != nil {
-		return nil, fmt.Errorf("error jwk.DecodePEM: %w", err)
-	}
+		token, err := jwt.Parse(
+			[]byte(tokenStr),
+			jwt.WithKey(jwa.RS256, key),
+		)
+		if err != nil {
+			return nil, echo.NewHTTPError(http.StatusUnauthorized, fmt.Errorf("error jwt.Parse: %s", err.Error()))
+		}
+		if token.Subject() == "" {
+			return nil, echo.NewHTTPError(
+				http.StatusUnauthorized,
+				fmt.Sprintf("invalid token: subject is not found in token: %s", tokenStr),
+			)
+		}
 
-	token, err := jwt.Parse(
-		[]byte(tokenStr),
-		jwt.WithKey(jwa.RS256, key),
-	)
-	if err != nil {
-		return nil, echo.NewHTTPError(http.StatusUnauthorized, fmt.Errorf("error jwt.Parse: %s", err.Error()))
-	}
-	if token.Subject() == "" {
-		return nil, echo.NewHTTPError(
-			http.StatusUnauthorized,
-			fmt.Sprintf("invalid token: subject is not found in token: %s", tokenStr),
-		)
-	}
-
-	var role string
-	tr, ok := token.Get("role")
-	if !ok {
-		return nil, echo.NewHTTPError(
-			http.StatusUnauthorized,
-			fmt.Sprintf("invalid token: role is not found: %s", tokenStr),
-		)
-	}
-	switch tr {
-	case RoleAdmin, RoleOrganizer, RolePlayer:
-		role = tr.(string)
-	default:
-		return nil, echo.NewHTTPError(
-			http.StatusUnauthorized,
-			fmt.Sprintf("invalid token: invalid role: %s", tokenStr),
-		)
-	}
-	// aud は1要素でテナント名がはいっている
-	aud := token.Audience()
-	if len(aud) != 1 {
-		return nil, echo.NewHTTPError(
-			http.StatusUnauthorized,
-			fmt.Sprintf("invalid token: aud field is few or too much: %s", tokenStr),
-		)
-	}
-	tenant, err := retrieveTenantRowFromHeader(c)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		var role string
+		tr, ok := token.Get("role")
+		if !ok {
+			return nil, echo.NewHTTPError(
+				http.StatusUnauthorized,
+				fmt.Sprintf("invalid token: role is not found: %s", tokenStr),
+			)
+		}
+		switch tr {
+		case RoleAdmin, RoleOrganizer, RolePlayer:
+			role = tr.(string)
+		default:
+			return nil, echo.NewHTTPError(
+				http.StatusUnauthorized,
+				fmt.Sprintf("invalid token: invalid role: %s", tokenStr),
+			)
+		}
+		// aud は1要素でテナント名がはいっている
+		aud := token.Audience()
+		if len(aud) != 1 {
+			return nil, echo.NewHTTPError(
+				http.StatusUnauthorized,
+				fmt.Sprintf("invalid token: aud field is few or too much: %s", tokenStr),
+			)
+		}
+		tenant, err := retrieveTenantRowFromHeader(c)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, echo.NewHTTPError(http.StatusUnauthorized, "tenant not found")
+			}
+			return nil, fmt.Errorf("error retrieveTenantRowFromHeader at parseViewer: %w", err)
+		}
+		if tenant.Name == "admin" && role != RoleAdmin {
 			return nil, echo.NewHTTPError(http.StatusUnauthorized, "tenant not found")
 		}
-		return nil, fmt.Errorf("error retrieveTenantRowFromHeader at parseViewer: %w", err)
-	}
-	if tenant.Name == "admin" && role != RoleAdmin {
-		return nil, echo.NewHTTPError(http.StatusUnauthorized, "tenant not found")
+
+		if tenant.Name != aud[0] {
+			return nil, echo.NewHTTPError(
+				http.StatusUnauthorized,
+				fmt.Sprintf("invalid token: tenant name is not match with %s: %s", c.Request().Host, tokenStr),
+			)
+		}
+
+		v = &Viewer{
+			role:       role,
+			playerID:   token.Subject(),
+			tenantName: tenant.Name,
+			tenantID:   tenant.ID,
+		}
+		cachedViewer.Store(tokenStr, v)
 	}
 
-	if tenant.Name != aud[0] {
-		return nil, echo.NewHTTPError(
-			http.StatusUnauthorized,
-			fmt.Sprintf("invalid token: tenant name is not match with %s: %s", c.Request().Host, tokenStr),
-		)
-	}
-
-	v := &Viewer{
-		role:       role,
-		playerID:   token.Subject(),
-		tenantName: tenant.Name,
-		tenantID:   tenant.ID,
-	}
 	return v, nil
 }
 
