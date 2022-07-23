@@ -1269,7 +1269,7 @@ func playerHandler(c echo.Context) error {
 		v.tenantID,
 		p.ID,
 	); err != nil {
-		return fmt.Errorf("error Select player_score: tenantID=%d, competitionID=%s, playerID=%s, %w", v.tenantID, p.ID, err)
+		return fmt.Errorf("error select err: %w", err)
 	}
 
 	psds := make([]PlayerScoreDetail, 0, len(pss))
