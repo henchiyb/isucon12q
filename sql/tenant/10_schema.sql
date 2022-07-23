@@ -35,6 +35,8 @@ CREATE TABLE player_score (
 
 CREATE INDEX `tenant_id_competition_id_idx` ON player_score (`tenant_id`, `competition_id`, `player_id`);
 
+CREATE INDEX `idx_tenant_id` ON player (`tenant_id`);
+
 CREATE TABLE latest_player_score (
   id VARCHAR(255) NOT NULL,
   tenant_id BIGINT NOT NULL,
