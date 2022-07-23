@@ -178,8 +178,8 @@ func Run() {
 		e.Logger.Fatalf("failed to connect db: %v", err)
 		return
 	}
-	adminDB.SetMaxOpenConns(25)
-	adminDB.SetMaxIdleConns(25)
+	adminDB.SetMaxOpenConns(40)
+	adminDB.SetMaxIdleConns(40)
 	defer adminDB.Close()
 
 	port := getEnv("SERVER_APP_PORT", "3000")
