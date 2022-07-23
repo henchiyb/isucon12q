@@ -582,19 +582,19 @@ var cacheVisitHistoryTimeAt sync.Map
 
 // 大会ごとの課金レポートを計算する
 func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID int64, competitonID string) (*BillingReport, error) {
-	cachedKey := fmt.Sprintf("%d_%s", tenantID, competitonID)
+	// cachedKey := fmt.Sprintf("%d_%s", tenantID, competitonID)
 	comp, err := retrieveCompetition(ctx, tenantDB, competitonID)
 
 	if err != nil {
 		return nil, fmt.Errorf("error retrieveCompetition: %w", err)
 	}
 
-	if comp.FinishedAt.Valid {
-		if cached, ok := cachedFinishedBillingReport.Load(cachedKey); ok {
-			result := cached.(BillingReport)
-			return &result, nil
-		}
-	}
+	// if comp.FinishedAt.Valid {
+	// 	if cached, ok := cachedFinishedBillingReport.Load(cachedKey); ok {
+	// 		result := cached.(BillingReport)
+	// 		return &result, nil
+	// 	}
+	// }
 
 	// ランキングにアクセスした参加者のIDを取得する
 	vhs := []VisitHistorySummaryRow{}
@@ -672,7 +672,7 @@ func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID i
 		BillingYen:        100*playerCount + 10*visitorCount,
 	}
 
-	cachedFinishedBillingReport.Store(cachedKey, result)
+	// cachedFinishedBillingReport.Store(cachedKey, result)
 
 	return &result, nil
 }
@@ -1047,7 +1047,7 @@ func competitionFinishHandler(c echo.Context) error {
 		)
 	}
 
-	go billingReportByCompetition(ctx, tenantDB, v.tenantID, id)
+	// go billingReportByCompetition(ctx, tenantDB, v.tenantID, id)
 	cachedConpetition.Delete(id)
 	return c.JSON(http.StatusOK, SuccessResult{Status: true})
 }
