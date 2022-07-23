@@ -563,7 +563,7 @@ func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID i
 	if comp.FinishedAt.Valid {
 		if cached, ok := cachedFinishedBillingReport.Load(cachedKey); ok {
 			result := cached.(BillingReport)
-			return result, nil
+			return &result, nil
 		}
 	}
 
@@ -622,7 +622,7 @@ func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID i
 		}
 	}
 
-	result := &BillingReport{
+	result := BillingReport{
 		CompetitionID:     comp.ID,
 		CompetitionTitle:  comp.Title,
 		PlayerCount:       playerCount,
@@ -634,7 +634,7 @@ func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID i
 
 	cachedFinishedBillingReport.Store(cachedKey, result)
 
-	return result, nil
+	return &result, nil
 }
 
 type TenantWithBilling struct {
