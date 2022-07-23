@@ -1,6 +1,15 @@
 
 DROP TABLE IF EXISTS latest_player_score;
 DROP TRIGGER IF EXISTS `tr1`;
+DROP INDEX IF EXISTS `tenant_id_competition_id_idx` ON player_score;
+DROP INDEX IF EXISTS `idx_tenant_id` ON player_score;
+DROP INDEX IF EXISTS `idx_tenant_id` ON player_score;
+
+CREATE INDEX `tenant_id_competition_id_idx` ON player_score (`tenant_id`, `competition_id`, `player_id`);
+
+CREATE INDEX `idx_tenant_id` ON player (`tenant_id`);
+
+CREATE INDEX `idx_tenant_id_created_at` ON competition (`tenant_id`, `created_at`);
 
 CREATE TABLE latest_player_score (
   id VARCHAR(255) NOT NULL,
