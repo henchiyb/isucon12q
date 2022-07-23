@@ -1383,7 +1383,7 @@ func competitionRankingHandler(c echo.Context) error {
 	if err := tenantDB.SelectContext(
 		ctx,
 		&pss,
-		"SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? GROUP BY player_ID ORDER BY row_num DESC LIMIT ?",
+		"SELECT player_score.score as score, player_score.player_id as player_id, b.row_num as row_num FROM player_score INNER JOIN (SELECT id, MAX(row_num) as row_num from player_score WHERE tenant_id = ? AND competition_id = ? GROUP BY player_ID ORDER BY row_num DESC LIMIT ?) as b ON b.id = player_score.id ORDER BY score DESC, row_num DESC",
 		tenant.ID,
 		competitionID,
 		100 + int(rankAfter),
@@ -1410,12 +1410,12 @@ func competitionRankingHandler(c echo.Context) error {
 			RowNum:            ps.RowNum,
 		})
 	}
-	sort.Slice(ranks, func(i, j int) bool {
-		if ranks[i].Score == ranks[j].Score {
-			return ranks[i].RowNum < ranks[j].RowNum
-		}
-		return ranks[i].Score > ranks[j].Score
-	})
+	// sort.Slice(ranks, func(i, j int) bool {
+	// 	if ranks[i].Score == ranks[j].Score {
+	// 		return ranks[i].RowNum < ranks[j].RowNum
+	// 	}
+	// 	return ranks[i].Score > ranks[j].Score
+	// })
 	pagedRanks := make([]CompetitionRank, 0, 100)
 	for i, rank := range ranks {
 		if int64(i) < rankAfter {
