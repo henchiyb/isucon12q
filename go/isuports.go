@@ -441,6 +441,8 @@ type LatestPlayerScoreRow struct {
 	RowNum        int64  `db:"row_num"`
 }
 
+var mapTenantLock sync.Map
+
 // 排他ロックのためのファイル名を生成する
 func lockFilePath(id int64) string {
 	tenantDBDir := getEnv("ISUCON_TENANT_DB_DIR", "../tenant_db")
@@ -457,6 +459,7 @@ func flockByTenantID(tenantID int64) (io.Closer, error) {
 	}
 	return fl, nil
 }
+
 
 type TenantsAddHandlerResult struct {
 	Tenant TenantWithBilling `json:"tenant"`
@@ -1083,11 +1086,21 @@ func competitionScoreHandler(c echo.Context) error {
 	}
 
 	// / DELETEしたタイミングで参照が来ると空っぽのランキングになるのでロックする
-	fl, err := flockByTenantID(v.tenantID)
-	if err != nil {
-		return fmt.Errorf("error flockByTenantID: %w", err)
+	// fl, err := flockByTenantID(v.tenantID)
+	// if err != nil {
+	// 	return fmt.Errorf("error flockByTenantID: %w", err)
+	// }
+	// defer fl.Close()
+	var lock sync.Mutex
+	if cached, ok := mapTenantLock.Load(v.tenantID); !ok {
+		lock = sync.Mutex{}
+		mapTenantLock.Store(v.tenantID, lock)
+	} else {
+		lock = cached.(sync.Mutex)
 	}
-	defer fl.Close()
+	
+	lock.Lock()
+	defer lock.Unlock()
 	var rowNum int64
 	playerScoreRows := []PlayerScoreRow{}
 	for {
