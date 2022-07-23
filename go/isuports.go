@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -25,7 +26,6 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/labstack/gommon/log"
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
@@ -140,8 +140,8 @@ func Run() {
 		golog.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 	e := echo.New()
-	e.Debug = true
-	e.Logger.SetLevel(log.DEBUG)
+	// e.Debug = true
+	// e.Logger.SetLevel(log.DEBUG)
 
 	var (
 		sqlLogger io.Closer
@@ -373,11 +373,18 @@ type PlayerRow struct {
 	UpdatedAt      int64  `db:"updated_at"`
 }
 
+var cachedPlayer sync.Map
+
 // 参加者を取得する
 func retrievePlayer(ctx context.Context, tenantDB dbOrTx, id string) (*PlayerRow, error) {
 	var p PlayerRow
-	if err := tenantDB.GetContext(ctx, &p, "SELECT * FROM player WHERE id = ?", id); err != nil {
-		return nil, fmt.Errorf("error Select player: id=%s, %w", id, err)
+	if cached, ok := cachedPlayer.Load(id); ok {
+		p = cached.(PlayerRow)
+	} else {
+		if err := tenantDB.GetContext(ctx, &p, "SELECT * FROM player WHERE id = ?", id); err != nil {
+			return nil, fmt.Errorf("error Select player: id=%s, %w", id, err)
+		}
+		cachedPlayer.Store(id, p)
 	}
 	return &p, nil
 }
@@ -407,11 +414,18 @@ type CompetitionRow struct {
 	UpdatedAt  int64         `db:"updated_at"`
 }
 
+var cachedConpetition sync.Map
+
 // 大会を取得する
 func retrieveCompetition(ctx context.Context, tenantDB dbOrTx, id string) (*CompetitionRow, error) {
 	var c CompetitionRow
-	if err := tenantDB.GetContext(ctx, &c, "SELECT * FROM competition WHERE id = ?", id); err != nil {
-		return nil, fmt.Errorf("error Select competition: id=%s, %w", id, err)
+	if cached, ok := cachedConpetition.Load(id); ok {
+		c = cached.(CompetitionRow)
+	} else {
+		if err := tenantDB.GetContext(ctx, &c, "SELECT * FROM competition WHERE id = ?", id); err != nil {
+			return nil, fmt.Errorf("error Select competition: id=%s, %w", id, err)
+		}
+		cachedConpetition.Store(id, c)
 	}
 	return &c, nil
 }
@@ -867,6 +881,7 @@ func playerDisqualifiedHandler(c echo.Context) error {
 			true, now, playerID, err,
 		)
 	}
+	cachedPlayer.Delete(playerID)
 	p, err := retrievePlayer(ctx, tenantDB, playerID)
 	if err != nil {
 		// 存在しないプレイヤー
@@ -984,6 +999,7 @@ func competitionFinishHandler(c echo.Context) error {
 			now, now, id, err,
 		)
 	}
+	cachedConpetition.Delete(id)
 	return c.JSON(http.StatusOK, SuccessResult{Status: true})
 }
 
