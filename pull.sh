@@ -10,10 +10,8 @@ git reset --hard origin/${BRANCH_NAME}
 echo "Reset ${BRANCH_NAME} done"
 #rebuild go
 #TODO
-cd go
-rm ${APP_NAME}
-~/local/go/bin/go build -o ${APP_NAME} -ldflags "-s -w"
-sudo systemctl restart "${APP_NAME}.go"
+sudo systemctl daemon-reload
+sudo systemctl restart isuports.service
 
 # reset memory cache
 sudo sh -c 'echo 3 >  /proc/sys/vm/drop_caches'
