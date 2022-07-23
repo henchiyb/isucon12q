@@ -178,8 +178,8 @@ func Run() {
 		e.Logger.Fatalf("failed to connect db: %v", err)
 		return
 	}
-	adminDB.SetMaxOpenConns(40)
-	adminDB.SetMaxIdleConns(40)
+	adminDB.SetMaxOpenConns(25)
+	adminDB.SetMaxIdleConns(25)
 	defer adminDB.Close()
 
 	port := getEnv("SERVER_APP_PORT", "3000")
@@ -563,6 +563,9 @@ type VisitHistorySummaryRow struct {
 
 var cachedFinishedBillingReport sync.Map
 
+
+var cacheVisitHistory sync.Map
+var cacheVisitHistoryTimeAt sync.Map
 // 大会ごとの課金レポートを計算する
 func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID int64, competitonID string) (*BillingReport, error) {
 	cachedKey := fmt.Sprintf("%d_%s", tenantID, competitonID)
@@ -581,15 +584,27 @@ func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID i
 
 	// ランキングにアクセスした参加者のIDを取得する
 	vhs := []VisitHistorySummaryRow{}
-	if err := adminDB.SelectContext(
-		ctx,
-		&vhs,
-		"SELECT player_id, MIN(created_at) AS min_created_at FROM visit_history WHERE tenant_id = ? AND competition_id = ? GROUP BY player_id",
-		tenantID,
-		comp.ID,
-	); err != nil && err != sql.ErrNoRows {
-		return nil, fmt.Errorf("error Select visit_history: tenantID=%d, competitionID=%s, %w", tenantID, comp.ID, err)
+	visitCacheKey := fmt.Sprintf("%s_%d", tenantID, comp.ID)
+	now := time.Now()
+	if cachedTime, ok := cacheVisitHistoryTimeAt.Load(visitCacheKey); ok {
+		if cached, ok := cacheVisitHistory.Load(visitCacheKey); ok && now.Sub(cachedTime.(time.Time)) < 1 * time.Second {
+			vhs = cached.([]VisitHistorySummaryRow)
+		}
+	} else {
+		if err := adminDB.SelectContext(
+			ctx,
+			&vhs,
+			"SELECT player_id, MIN(created_at) AS min_created_at FROM visit_history WHERE tenant_id = ? AND competition_id = ? GROUP BY player_id",
+			tenantID,
+			comp.ID,
+		); err != nil && err != sql.ErrNoRows {
+			return nil, fmt.Errorf("error Select visit_history: tenantID=%d, competitionID=%s, %w", tenantID, comp.ID, err)
+		}
+		cacheVisitHistoryTimeAt.Store(visitCacheKey, now)
+		cacheVisitHistory.Store(visitCacheKey, vhs)
 	}
+	
+	
 	billingMap := map[string]string{}
 	for _, vh := range vhs {
 		// competition.finished_atよりもあとの場合は、終了後に訪問したとみなして大会開催内アクセス済みとみなさない
