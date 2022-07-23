@@ -1288,11 +1288,22 @@ func playerHandler(c echo.Context) error {
 	}
 
 	// player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
-	fl, err := flockByTenantID(v.tenantID)
-	if err != nil {
-		return fmt.Errorf("error flockByTenantID: %w", err)
+	// fl, err := flockByTenantID(v.tenantID)
+	// if err != nil {
+	// 	return fmt.Errorf("error flockByTenantID: %w", err)
+	// }
+	// defer fl.Close()
+
+	var lock sync.Mutex
+	if cached, ok := mapTenantLock.Load(v.tenantID); !ok {
+		lock = sync.Mutex{}
+		mapTenantLock.Store(v.tenantID, lock)
+	} else {
+		lock = cached.(sync.Mutex)
 	}
-	defer fl.Close()
+	
+	lock.Lock()
+	defer lock.Unlock()
 
 	var pss []PlayerScoreRow
 	comIds := make([]string, 0, len(cs))
@@ -1412,11 +1423,21 @@ func competitionRankingHandler(c echo.Context) error {
 	}
 
 	// player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
-	fl, err := flockByTenantID(v.tenantID)
-	if err != nil {
-		return fmt.Errorf("error flockByTenantID: %w", err)
+	// fl, err := flockByTenantID(v.tenantID)
+	// if err != nil {
+	// 	return fmt.Errorf("error flockByTenantID: %w", err)
+	// }
+	// defer fl.Close()
+	var lock sync.Mutex
+	if cached, ok := mapTenantLock.Load(v.tenantID); !ok {
+		lock = sync.Mutex{}
+		mapTenantLock.Store(v.tenantID, lock)
+	} else {
+		lock = cached.(sync.Mutex)
 	}
-	defer fl.Close()
+	
+	lock.Lock()
+	defer lock.Unlock()
 	pss := []PlayerScoreRow{}
 	if err := tenantDB.SelectContext(
 		ctx,
