@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/goccy/go-json"
 	"github.com/gofrs/flock"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
@@ -32,6 +33,23 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwt"
 	"github.com/rs/xid"
 )
+
+type JSONSerializer struct{}
+
+func (j *JSONSerializer) Serialize(c echo.Context, i interface{}, indent string) error {
+	enc := json.NewEncoder(c.Response())
+	return enc.Encode(i)
+}
+
+func (j *JSONSerializer) Deserialize(c echo.Context, i interface{}) error {
+	err := json.NewDecoder(c.Request().Body).Decode(i)
+	if ute, ok := err.(*json.UnmarshalTypeError); ok {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unmarshal type error: expected=%v, got=%v, field=%v, offset=%v", ute.Type, ute.Value, ute.Field, ute.Offset)).SetInternal(err)
+	} else if se, ok := err.(*json.SyntaxError); ok {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Syntax error: offset=%v, error=%v", se.Offset, se.Error())).SetInternal(err)
+	}
+	return err
+}
 
 const (
 	tenantDBSchemaFilePath = "../sql/tenant/10_schema.sql"
@@ -126,6 +144,7 @@ func Run() {
 	// e.Debug = true
 	// e.Logger.SetLevel(log.DEBUG)
 
+	e.JSONSerializer = &JSONSerializer{}
 	var (
 		sqlLogger io.Closer
 		err       error
@@ -461,7 +480,6 @@ func flockByTenantID(tenantID int64) (io.Closer, error) {
 	return fl, nil
 }
 
-
 type TenantsAddHandlerResult struct {
 	Tenant TenantWithBilling `json:"tenant"`
 }
@@ -563,9 +581,9 @@ type VisitHistorySummaryRow struct {
 
 var cachedFinishedBillingReport sync.Map
 
-
 var cacheVisitHistory sync.Map
 var cacheVisitHistoryTimeAt sync.Map
+
 // 大会ごとの課金レポートを計算する
 func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID int64, competitonID string) (*BillingReport, error) {
 	cachedKey := fmt.Sprintf("%d_%s", tenantID, competitonID)
@@ -587,7 +605,7 @@ func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID i
 	visitCacheKey := fmt.Sprintf("%s_%d", tenantID, comp.ID)
 	now := time.Now()
 	if cachedTime, ok := cacheVisitHistoryTimeAt.Load(visitCacheKey); ok {
-		if cached, ok := cacheVisitHistory.Load(visitCacheKey); ok && now.Sub(cachedTime.(time.Time)) < 2 * time.Second {
+		if cached, ok := cacheVisitHistory.Load(visitCacheKey); ok && now.Sub(cachedTime.(time.Time)) < 2*time.Second {
 			vhs = cached.([]VisitHistorySummaryRow)
 		}
 	} else {
@@ -603,8 +621,7 @@ func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID i
 		cacheVisitHistoryTimeAt.Store(visitCacheKey, now)
 		cacheVisitHistory.Store(visitCacheKey, vhs)
 	}
-	
-	
+
 	billingMap := map[string]string{}
 	for _, vh := range vhs {
 		// competition.finished_atよりもあとの場合は、終了後に訪問したとみなして大会開催内アクセス済みとみなさない
@@ -1114,7 +1131,7 @@ func competitionScoreHandler(c echo.Context) error {
 	} else {
 		lock = cached.(sync.Mutex)
 	}
-	
+
 	lock.Lock()
 	defer lock.Unlock()
 	var rowNum int64
@@ -1317,7 +1334,7 @@ func playerHandler(c echo.Context) error {
 	} else {
 		lock = cached.(sync.Mutex)
 	}
-	
+
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -1451,7 +1468,7 @@ func competitionRankingHandler(c echo.Context) error {
 	} else {
 		lock = cached.(sync.Mutex)
 	}
-	
+
 	lock.Lock()
 	defer lock.Unlock()
 	pss := []PlayerScoreRow{}
