@@ -587,7 +587,7 @@ func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID i
 	visitCacheKey := fmt.Sprintf("%s_%d", tenantID, comp.ID)
 	now := time.Now()
 	if cachedTime, ok := cacheVisitHistoryTimeAt.Load(visitCacheKey); ok {
-		if cached, ok := cacheVisitHistory.Load(visitCacheKey); ok && now.Sub(cachedTime.(time.Time)) < 1 * time.Second {
+		if cached, ok := cacheVisitHistory.Load(visitCacheKey); ok && now.Sub(cachedTime.(time.Time)) < 2 * time.Second {
 			vhs = cached.([]VisitHistorySummaryRow)
 		}
 	} else {
