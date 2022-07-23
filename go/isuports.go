@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
-	"sort"
+	// "sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1433,12 +1433,12 @@ func competitionRankingHandler(c echo.Context) error {
 			RowNum:            ps.RowNum,
 		})
 	}
-	sort.Slice(ranks, func(i, j int) bool {
-		if ranks[i].Score == ranks[j].Score {
-			return ranks[i].RowNum < ranks[j].RowNum
-		}
-		return ranks[i].Score > ranks[j].Score
-	})
+	// sort.Slice(ranks, func(i, j int) bool {
+	// 	if ranks[i].Score == ranks[j].Score {
+	// 		return ranks[i].RowNum < ranks[j].RowNum
+	// 	}
+	// 	return ranks[i].Score > ranks[j].Score
+	// })
 	pagedRanks := make([]CompetitionRank, 0, 100)
 	for i, rank := range ranks {
 		if int64(i) < rankAfter {
