@@ -17,6 +17,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/goccy/go-json v0.9.7 // indirect
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
+	github.com/kayac/go-katsubushi v1.6.2
 	github.com/kr/text v0.2.0 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.1 // indirect
 	github.com/lestrrat-go/httpcc v1.0.1 // indirect
@@ -34,4 +35,13 @@ require (
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20220609170525-579cf78fd858 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
+)
+
+require (
+	github.com/Songmu/retry v0.0.1 // indirect
+	github.com/pkg/errors v0.8.0 // indirect
+	github.com/rs/xid v1.4.0
+	go.uber.org/atomic v1.3.1 // indirect
+	go.uber.org/multierr v1.1.0 // indirect
+	go.uber.org/zap v1.7.1 // indirect
 )
