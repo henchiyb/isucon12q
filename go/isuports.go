@@ -66,7 +66,7 @@ func getEnv(key string, defaultValue string) string {
 func connectAdminDB() (*sqlx.DB, error) {
 	config := mysql.NewConfig()
 	config.Net = "tcp"
-	config.Addr = getEnv("ISUCON_DB_HOST", "127.0.0.1") + ":" + getEnv("ISUCON_DB_PORT", "3306")
+	config.Addr = "192.168.0.13:3306"
 	config.User = getEnv("ISUCON_DB_USER", "isucon")
 	config.Passwd = getEnv("ISUCON_DB_PASSWORD", "isucon")
 	config.DBName = getEnv("ISUCON_DB_NAME", "isuports")
@@ -1015,7 +1015,7 @@ func competitionFinishHandler(c echo.Context) error {
 		)
 	}
 
-	go billingReportByCompetition(ctx, tenantDB, v.tenantID, id)
+	// go billingReportByCompetition(ctx, tenantDB, v.tenantID, id)
 	cachedConpetition.Delete(id)
 	return c.JSON(http.StatusOK, SuccessResult{Status: true})
 }
