@@ -33,6 +33,7 @@ import (
 
 const (
 	tenantDBSchemaFilePath = "../sql/tenant/10_schema.sql"
+	tenantTrigger = "../sql/tenant/trigger.sql"
 	initializeScript       = "../sql/init.sh"
 	cookieName             = "isuports_session"
 
@@ -1273,6 +1274,7 @@ func playerHandler(c echo.Context) error {
 	}
 	defer fl.Close()
 	pss := make([]PlayerScoreRow, 0, len(cs))
+	// TODO: N+1
 	for _, c := range cs {
 		ps := PlayerScoreRow{}
 		if err := tenantDB.GetContext(
@@ -1639,6 +1641,22 @@ type InitializeHandlerResult struct {
 	Lang string `json:"lang"`
 }
 
+func createTenant() {
+	var tenantIDs []int
+	db, _ := connectAdminDB()
+	if err := db.Select(&tenantIDs, "SELECT id from tenant"); err != nil {
+		fmt.Errorf("select tenant failed")
+	}
+	for _, id := range tenantIDs {
+		p := tenantDBPath(int64(id))
+
+		cmd := exec.Command("sh", "-c", fmt.Sprintf("sqlite3 %s < %s", p, tenantTrigger))
+		if out, err := cmd.CombinedOutput(); err != nil {
+			fmt.Errorf("failed to exec sqlite3 %s < %s, out=%s: %w", p, tenantDBSchemaFilePath, string(out), err)
+		}
+	}
+}
+
 // ベンチマーカー向けAPI
 // POST /initialize
 // ベンチマーカーが起動したときに最初に呼ぶ
@@ -1648,6 +1666,7 @@ func initializeHandler(c echo.Context) error {
 	if err != nil {
 		return fmt.Errorf("error exec.Command: %s %e", string(out), err)
 	}
+	createTenant()
 	res := InitializeHandlerResult{
 		Lang: "go",
 	}
