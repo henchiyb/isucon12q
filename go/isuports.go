@@ -232,9 +232,9 @@ func parseViewer(c echo.Context) (*Viewer, error) {
 		)
 	}
 	tokenStr := cookie.Value
-	var v *Viewer
+	var v Viewer
 	if cached, ok := cachedViewer.Load(tokenStr); ok {
-		v = cached.(*Viewer)
+		v = cached.(Viewer)
 	} else {
 		keyFilename := getEnv("ISUCON_JWT_KEY_FILE", "../public.pem")
 		keysrc, err := os.ReadFile(keyFilename)
@@ -303,7 +303,7 @@ func parseViewer(c echo.Context) (*Viewer, error) {
 			)
 		}
 
-		v = &Viewer{
+		v = Viewer{
 			role:       role,
 			playerID:   token.Subject(),
 			tenantName: tenant.Name,
@@ -312,7 +312,7 @@ func parseViewer(c echo.Context) (*Viewer, error) {
 		cachedViewer.Store(tokenStr, v)
 	}
 
-	return v, nil
+	return &v, nil
 }
 
 func retrieveTenantRowFromHeader(c echo.Context) (*TenantRow, error) {
