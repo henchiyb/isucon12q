@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
-	"sort"
+	// "sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,6 +34,7 @@ import (
 
 const (
 	tenantDBSchemaFilePath = "../sql/tenant/10_schema.sql"
+	tenantTrigger = "../sql/tenant/trigger.sql"
 	initializeScript       = "../sql/init.sh"
 	cookieName             = "isuports_session"
 
@@ -420,6 +421,15 @@ type PlayerScoreRow struct {
 	RowNum        int64  `db:"row_num"`
 	CreatedAt     int64  `db:"created_at"`
 	UpdatedAt     int64  `db:"updated_at"`
+}
+
+type LatestPlayerScoreRow struct {
+	TenantID      int64  `db:"tenant_id"`
+	ID            string `db:"id"`
+	PlayerID      string `db:"player_id"`
+	CompetitionID string `db:"competition_id"`
+	Score         int64  `db:"score"`
+	RowNum        int64  `db:"row_num"`
 }
 
 // 排他ロックのためのファイル名を生成する
@@ -1245,13 +1255,14 @@ func playerHandler(c echo.Context) error {
 	}
 	defer fl.Close()
 	pss := make([]PlayerScoreRow, 0, len(cs))
+	// TODO: N+1
 	for _, c := range cs {
 		ps := PlayerScoreRow{}
 		if err := tenantDB.GetContext(
 			ctx,
 			&ps,
 			// 最後にCSVに登場したスコアを採用する = row_numが一番大きいもの
-			"SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? AND player_id = ? ORDER BY row_num DESC LIMIT 1",
+			"SELECT * FROM latest_player_score WHERE tenant_id = ? AND competition_id = ? AND player_id = ? LIMIT 1",
 			v.tenantID,
 			c.ID,
 			p.ID,
@@ -1376,9 +1387,10 @@ func competitionRankingHandler(c echo.Context) error {
 	if err := tenantDB.SelectContext(
 		ctx,
 		&pss,
-		"SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? ORDER BY row_num DESC",
+		"SELECT * FROM latest_player_score WHERE tenant_id = ? AND competition_id = ? ORDER BY score DESC, row_num ASC LIMIT ?",
 		tenant.ID,
 		competitionID,
+		100 + int(rankAfter) + 2,
 	); err != nil {
 		return fmt.Errorf("error Select player_score: tenantID=%d, competitionID=%s, %w", tenant.ID, competitionID, err)
 	}
@@ -1402,12 +1414,12 @@ func competitionRankingHandler(c echo.Context) error {
 			RowNum:            ps.RowNum,
 		})
 	}
-	sort.Slice(ranks, func(i, j int) bool {
-		if ranks[i].Score == ranks[j].Score {
-			return ranks[i].RowNum < ranks[j].RowNum
-		}
-		return ranks[i].Score > ranks[j].Score
-	})
+	// sort.Slice(ranks, func(i, j int) bool {
+	// 	if ranks[i].Score == ranks[j].Score {
+	// 		return ranks[i].RowNum < ranks[j].RowNum
+	// 	}
+	// 	return ranks[i].Score > ranks[j].Score
+	// })
 	pagedRanks := make([]CompetitionRank, 0, 100)
 	for i, rank := range ranks {
 		if int64(i) < rankAfter {
@@ -1611,6 +1623,22 @@ type InitializeHandlerResult struct {
 	Lang string `json:"lang"`
 }
 
+func createTenant() {
+	var tenantIDs []int
+	db, _ := connectAdminDB()
+	if err := db.Select(&tenantIDs, "SELECT id from tenant"); err != nil {
+		fmt.Errorf("select tenant failed")
+	}
+	for _, id := range tenantIDs {
+		p := tenantDBPath(int64(id))
+
+		cmd := exec.Command("sh", "-c", fmt.Sprintf("sqlite3 %s < %s", p, tenantTrigger))
+		if out, err := cmd.CombinedOutput(); err != nil {
+			fmt.Errorf("failed to exec sqlite3 %s < %s, out=%s: %w", p, tenantDBSchemaFilePath, string(out), err)
+		}
+	}
+}
+
 // ベンチマーカー向けAPI
 // POST /initialize
 // ベンチマーカーが起動したときに最初に呼ぶ
@@ -1620,6 +1648,7 @@ func initializeHandler(c echo.Context) error {
 	if err != nil {
 		return fmt.Errorf("error exec.Command: %s %e", string(out), err)
 	}
+	createTenant()
 	res := InitializeHandlerResult{
 		Lang: "go",
 	}
