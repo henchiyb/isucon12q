@@ -720,7 +720,7 @@ func tenantsBillingHandler(c echo.Context) error {
 				"SELECT * FROM competition WHERE tenant_id=?",
 				t.ID,
 			); err != nil {
-				return fmt.Errorf("failed to Select competition: %w", err)
+				return fmt.Errorf("failed to Select competition: %w, %d", err, t.ID)
 			}
 			for _, comp := range cs {
 				report, err := billingReportByCompetition(ctx, tenantDB, t.ID, comp.ID)
