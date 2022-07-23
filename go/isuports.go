@@ -414,11 +414,18 @@ type CompetitionRow struct {
 	UpdatedAt  int64         `db:"updated_at"`
 }
 
+var cachedConpetition sync.Map
+
 // 大会を取得する
 func retrieveCompetition(ctx context.Context, tenantDB dbOrTx, id string) (*CompetitionRow, error) {
 	var c CompetitionRow
-	if err := tenantDB.GetContext(ctx, &c, "SELECT * FROM competition WHERE id = ?", id); err != nil {
-		return nil, fmt.Errorf("error Select competition: id=%s, %w", id, err)
+	if cached, ok := cachedConpetition.Load(id); ok {
+		c = cached.(CompetitionRow)
+	} else {
+		if err := tenantDB.GetContext(ctx, &c, "SELECT * FROM competition WHERE id = ?", id); err != nil {
+			return nil, fmt.Errorf("error Select competition: id=%s, %w", id, err)
+		}
+		cachedConpetition.Store(id, c)
 	}
 	return &c, nil
 }
@@ -992,6 +999,7 @@ func competitionFinishHandler(c echo.Context) error {
 			now, now, id, err,
 		)
 	}
+	cachedConpetition.Delete(id)
 	return c.JSON(http.StatusOK, SuccessResult{Status: true})
 }
 
