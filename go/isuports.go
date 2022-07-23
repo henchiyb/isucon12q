@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+
 	// "sort"
 	"strconv"
 	"strings"
@@ -34,7 +35,7 @@ import (
 
 const (
 	tenantDBSchemaFilePath = "../sql/tenant/10_schema.sql"
-	tenantTrigger = "../sql/tenant/trigger.sql"
+	tenantTrigger          = "../sql/tenant/trigger.sql"
 	initializeScript       = "../sql/init.sh"
 	cookieName             = "isuports_session"
 
@@ -587,11 +588,11 @@ func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID i
 	}
 
 	// player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
-	fl, err := flockByTenantID(tenantID)
-	if err != nil {
-		return nil, fmt.Errorf("error flockByTenantID: %w", err)
-	}
-	defer fl.Close()
+	// fl, err := flockByTenantID(tenantID)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("error flockByTenantID: %w", err)
+	// }
+	// defer fl.Close()
 
 	// スコアを登録した参加者のIDを取得する
 	scoredPlayerIDs := []string{}
@@ -1270,26 +1271,21 @@ func playerHandler(c echo.Context) error {
 		return fmt.Errorf("error flockByTenantID: %w", err)
 	}
 	defer fl.Close()
-	pss := make([]PlayerScoreRow, 0, len(cs))
-	// TODO: N+1
+
+	var pss []PlayerScoreRow
+	comIds := make([]string, 0, len(cs))
 	for _, c := range cs {
-		ps := PlayerScoreRow{}
-		if err := tenantDB.GetContext(
-			ctx,
-			&ps,
-			// 最後にCSVに登場したスコアを採用する = row_numが一番大きいもの
-			"SELECT * FROM latest_player_score WHERE tenant_id = ? AND competition_id = ? AND player_id = ? LIMIT 1",
-			v.tenantID,
-			c.ID,
-			p.ID,
-		); err != nil {
-			// 行がない = スコアが記録されてない
-			if errors.Is(err, sql.ErrNoRows) {
-				continue
-			}
-			return fmt.Errorf("error Select player_score: tenantID=%d, competitionID=%s, playerID=%s, %w", v.tenantID, c.ID, p.ID, err)
-		}
-		pss = append(pss, ps)
+		comIds = append(comIds, c.ID)
+	}
+	if err := tenantDB.SelectContext(
+		ctx,
+		&pss,
+		// 最後にCSVに登場したスコアを採用する = row_numが一番大きいもの
+		"SELECT * FROM latest_player_score WHERE tenant_id = ? AND competition_id IN ('"+strings.Join(comIds, "','")+"') AND player_id = ?",
+		v.tenantID,
+		p.ID,
+	); err != nil {
+		return fmt.Errorf("error select err: %w", err)
 	}
 
 	psds := make([]PlayerScoreDetail, 0, len(pss))
@@ -1406,7 +1402,7 @@ func competitionRankingHandler(c echo.Context) error {
 		"SELECT * FROM latest_player_score WHERE tenant_id = ? AND competition_id = ? ORDER BY score DESC, row_num ASC LIMIT ?",
 		tenant.ID,
 		competitionID,
-		100 + int(rankAfter) + 2,
+		100+int(rankAfter)+2,
 	); err != nil {
 		return fmt.Errorf("error Select player_score: tenantID=%d, competitionID=%s, %w", tenant.ID, competitionID, err)
 	}
